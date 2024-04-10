@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">OpenCV Camera</string>
+    <string name="fab_Text">Configuration</string>
+    <string name="cameraSwitch">Change Camera</string>
+    <string name="about">About</string>
+    <string name="recognize">Recognize</string>
+    <string name="save">Save Data</string>
+    <string name="start_camera">Start Camera</string>
+    <string name="success">Successfully</string>
+</resources>

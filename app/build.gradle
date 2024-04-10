@@ -1,0 +1,112 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    signingConfigs {
+        release {
+            storeFile file("keystore.jks")
+            storePassword System.getenv("SIGNING_STORE_PASSWORD")
+            keyAlias System.getenv("SIGNING_KEY_ALIAS")
+            keyPassword System.getenv("SIGNING_KEY_PASSWORD")
+        }
+    }
+    namespace 'com.os.cvCamera'
+    ndkVersion '25.2.9519653'
+
+    def gitCommitHash = 'git rev-parse --verify --short HEAD'.execute().text.trim()
+
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.os.cvCamera"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+        buildConfigField("String", "GIT_HASH", "\"${gitCommitHash}\"")
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake {
+                arguments "-DOpenCV_DIR=" + file('../opencvsdk490').absolutePath + "/sdk/native/jni",
+                        "-DANDROID_TOOLCHAIN=clang",
+                        "-DANDROID_STL=c++_shared"
+                cppFlags ''
+            }
+        }
+    }
+
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    lint {
+        baseline = file("lint-baseline.xml")
+        xmlOutput file('lint-results.xml')
+    }
+
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.18.1'
+        }
+    }
+    buildFeatures {
+        viewBinding true
+        buildConfig true
+    }
+
+
+    packagingOptions {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+        }
+    }
+
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+
+    // Material
+    implementation 'com.google.android.material:material:1.11.0'
+
+    //Src - OpenCV-4
+    implementation project(path: ':opencvsdk490')
+    // Maven OpenCV-4
+    // implementation 'org.opencv:opencv:4.9.0'
+
+    //Timber Log
+    implementation 'com.jakewharton.timber:timber:5.0.1'
+
+    // AndroidX Startup
+    implementation 'androidx.startup:startup-runtime:1.1.1'
+    implementation 'androidx.test.ext:junit-ktx:1.1.5'
+    // AndroidX Test - JVM testing
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'androidx.test.ext:junit:1.1.5'
+    // Espresso UI Testing
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+
+
+
+}
