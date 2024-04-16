@@ -7,7 +7,7 @@ import org.opencv.android.FpsMeter
 import org.opencv.core.Core
 import java.text.DecimalFormat
 
-class CvFpsMeter : FpsMeter() {
+class CvFpsMeter : FpsMeter() { // Measure and Draw FPS number, resolution
 
     private val STEP = 20
     private val FPS_FORMAT = DecimalFormat("0.00")
@@ -20,8 +20,8 @@ class CvFpsMeter : FpsMeter() {
     private var mIsInitialized = false
     private var mWidth = 0
     private var mHeight = 0
-    private var mExtraOffsetX = 40f
-    private var mExtraOffsetY = 80f
+    private var mExtraOffsetX = 20f
+    private var mExtraOffsetY = 60f
 
     override fun init() {
         mFramesCounter = 0
@@ -30,7 +30,7 @@ class CvFpsMeter : FpsMeter() {
         mStrfps = ""
         mPaint = Paint()
         mPaint!!.color = Color.WHITE
-        mPaint!!.textSize = 80f
+        mPaint!!.textSize = 60f
     }
 
     override fun measure() {
@@ -61,6 +61,6 @@ class CvFpsMeter : FpsMeter() {
     }
 
     override fun draw(canvas: Canvas, offsetx: Float, offsety: Float) {
-        canvas.drawText(mStrfps!!, offsetx + mExtraOffsetX, offsety + mExtraOffsetY, mPaint!!)
+//         canvas.drawText(mStrfps!!, offsetx + mExtraOffsetX, offsety + mExtraOffsetY, mPaint!!)
     }
 }

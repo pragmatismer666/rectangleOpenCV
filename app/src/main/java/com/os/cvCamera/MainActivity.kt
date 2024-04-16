@@ -7,10 +7,8 @@ import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.Bundle
-import android.util.TypedValue
 import android.view.WindowManager
 import android.widget.Toast
-import androidx.core.view.get
 import com.os.cvCamera.BuildConfig.VERSION_NAME
 import com.os.cvCamera.databinding.ActivityMainBinding
 import org.opencv.android.CameraActivity
@@ -33,8 +31,7 @@ class MainActivity : CameraActivity(), CvCameraViewListener2 {
 
     // Filters id
     private var mFilterId = -1
-
-
+    private var mIsEnableFilter = false
     companion object {
         init {
             System.loadLibrary("opencv_java4")
@@ -52,9 +49,7 @@ class MainActivity : CameraActivity(), CvCameraViewListener2 {
         setContentView(binding.root)
         mCameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
 
-        // Load Cv Configs
         loadOpenCVConfigs()
-        // Load buttonConfigs
         configButtons()
     }
 
@@ -65,7 +60,6 @@ class MainActivity : CameraActivity(), CvCameraViewListener2 {
 
         binding.bottomAppBar.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
-
                 R.id.btnAbout -> {
                     // Get app version and githash from BuildConfig
                     val cvVer = openCVVersion() // Get OpenCV version from native code
@@ -80,14 +74,12 @@ class MainActivity : CameraActivity(), CvCameraViewListener2 {
                 }
 
                 R.id.btnRecognize -> {
-                    Toast.makeText(this, getString(R.string.success), Toast.LENGTH_SHORT).show()
+                    mIsEnableFilter = !mIsEnableFilter
+                    binding.CvCamera.updateFilterStatus(mIsEnableFilter)
                     true
                 }
 
                 R.id.btnSave -> {
-//                    binding.CvCamera.disableView()
-//                    binding.CvCamera.setFitToCanvas(!binding.CvCamera.getFitToCanvas())
-//                    binding.CvCamera.enableView()
                     true
                 }
 
@@ -115,7 +107,6 @@ class MainActivity : CameraActivity(), CvCameraViewListener2 {
         binding.CvCamera.setCameraIndex(mCameraId)
         binding.CvCamera.setCvCameraViewListener(this)
         binding.CvCamera.setCameraPermissionGranted()
-        Timber.d("OpenCV Camera Loaded")
         binding.CvCamera.enableView()
         binding.CvCamera.getCameraDevice()
     }
