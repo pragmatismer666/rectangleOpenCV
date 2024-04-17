@@ -4,22 +4,14 @@ import android.content.Context
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.PorterDuff
 import android.graphics.Rect
 import android.hardware.camera2.CameraDevice
-import android.hardware.camera2.CaptureRequest
 import android.util.AttributeSet
 import org.opencv.android.JavaCamera2View
 import org.opencv.android.Utils
-import org.opencv.core.Core
-import org.opencv.core.Core.inRange
-import org.opencv.core.CvType
-import org.opencv.core.CvType.CV_8UC1
-import org.opencv.core.CvType.CV_8UC3
 import org.opencv.core.Mat
-import org.opencv.core.MatOfPoint
 import org.opencv.core.Point
 import org.opencv.core.Scalar
 import org.opencv.core.Size
@@ -34,8 +26,9 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
     private var mCacheBitmap: Bitmap? = null
     private var mListener: CvCameraViewListener2? = null
     private var mFitToCanvas: Boolean = true
-    private var mIsFilter: Boolean = false;
-    private var lastFilteredFrameTime: Long = 0
+    private var mIsFilter: Boolean = false
+    private var mIsFilterFirst: Boolean = true
+
     private fun updateMatrix() {
         val mw: Float = this.width.toFloat()
         val mh: Float = this.height.toFloat()
@@ -65,22 +58,60 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
 
     override fun layout(l: Int, t: Int, r: Int, b: Int) {
         super.layout(l, t, r, b)
-        if (mFitToCanvas) updateMatrix()
+        updateMatrix()
     }
 
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-        if (mFitToCanvas) updateMatrix()
-    }
+
 
     override fun deliverAndDrawFrame(frame: CvCameraViewFrame?) {
-        if (!mFitToCanvas)
-            super.deliverAndDrawFrame(frame)
-        else
-            deliverAndDrawFrame2(frame)
+        deliverAndDrawFrame2(frame)
     }
 
-    fun detectEdges(inputFrame: Mat): Mat {
+    private fun detectCoordinate(
+        inputFrame: Mat,
+        pointsList: MutableList<Point>,
+        minX: Double,
+        maxX: Double,
+        minY: Double,
+        maxY: Double
+    ) {
+
+        for (point in pointsList) {
+
+            Imgproc.circle(inputFrame, point, 2, Scalar(0.0, 250.0, 0.0), -1)
+        }
+        // Add edge line for whole area
+        Imgproc.line(inputFrame, Point(minX, minY), Point(minX, maxY), Scalar(0.0, 250.0, 0.0), 2)
+        Imgproc.line(inputFrame, Point(minX, minY), Point(maxX, minY), Scalar(0.0, 250.0, 0.0), 2)
+        Imgproc.line(inputFrame, Point(maxX, minY), Point(maxX, maxY), Scalar(0.0, 250.0, 0.0), 2)
+        Imgproc.line(inputFrame, Point(minX, maxY), Point(maxX, maxY), Scalar(0.0, 250.0, 0.0), 2)
+
+        // zero point
+        Imgproc.circle(inputFrame, Point(minX, maxY), 2, Scalar(250.0, 0.0, 0.0), -1)
+        Imgproc.putText(
+            inputFrame,
+            "(0, 0)",
+            Point(minX + 10, maxY - 10),
+            Imgproc.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            Scalar(255.0, 0.0, 0.0),
+            1,
+            Imgproc.LINE_AA
+        )
+        Imgproc.circle(inputFrame, Point(maxX, minY), 2, Scalar(250.0, 0.0, 0.0), -1)
+        Imgproc.putText(
+            inputFrame,
+            "(X, Y)",
+            Point(maxX - 50, minY + 20),
+            Imgproc.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            Scalar(255.0, 0.0, 0.0),
+            1,
+            Imgproc.LINE_AA
+        )
+    }
+
+    private fun detectEdges(inputFrame: Mat): Mat {
         val grayFrame = Mat()
         Imgproc.cvtColor(inputFrame, grayFrame, Imgproc.COLOR_BGR2GRAY)
         // Apply Gaussian blur to reduce noise and detail
@@ -89,22 +120,50 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
         // Apply Canny edge detection
         val edges = Mat()
         Imgproc.Canny(blurredFrame, edges, 100.0, 250.0)
-        // Invert the edges to create a mask where edge pixels are black and everything else is white
-        val invertedEdges = Mat()
-        Core.bitwise_not(edges, invertedEdges)
-        // Define transparent color (in BGR format)
-        val transparentColor = Scalar(0.0, 0.0, 0.0, 0.0) // Fully transparent black
-        // Create a copy of the original frame with transparent edges
-        val transparentFrame = Mat(inputFrame.size(), inputFrame.type(), transparentColor)
-        inputFrame.copyTo(transparentFrame, invertedEdges)
 
-        grayFrame.release()
-        blurredFrame.release()
-        edges.release()
-        invertedEdges.release()
-        inputFrame.release()
-        
-        return transparentFrame
+        val lines = Mat()
+        Imgproc.HoughLinesP(edges, lines, 1.0, Math.PI / 360, 20, 20.0, 50.0)
+        val pointsList = mutableListOf<Point>()
+        var minX = 1000.0
+        var minY = 1000.0
+        var maxX = 0.0
+        var maxY = 0.0
+        for (i in 0 until lines.rows()) {
+            val line = lines.get(i, 0)
+            val x1: Double = line[0]
+            val y1: Double = line[1]
+            if (5 < x1 && x1 < 650 && 50 < y1 && y1 < 420) {
+                if (x1 < minX) minX = x1
+                if (y1 < minY) minY = y1
+                if (x1 > maxX) maxX = x1
+                if (y1 > maxY) maxY = y1
+                pointsList.add(Point(x1, y1))
+            }
+            val x2: Double = line[2]
+            val y2: Double = line[3]
+            if (5 < x2 && x2 < 650 && 50 < y2 && y2 < 420) {
+                if (x2 < minX) minX = x2
+                if (y2 < minY) minY = y2
+                if (x2 > maxX) maxX = x2
+                if (y2 > maxY) maxY = y2
+                pointsList.add(Point(x2, y2))
+            }
+        }
+        detectCoordinate(inputFrame, pointsList, minX, maxX, minY, maxY)
+        //        // Invert the edges to create a mask where edge pixels are black and everything else is white
+        //        val invertedEdges = Mat()
+        //        Core.bitwise_not(edges, invertedEdges)
+        //        // Define transparent color (in BGR format)
+        //        val transparentColor = Scalar(0.0, 0.0, 0.0, 0.0) // Fully transparent black
+        //        // Create a copy of the original frame with transparent edges
+        //        val transparentFrame = Mat(inputFrame.size(), inputFrame.type(), transparentColor)
+        //        inputFrame.copyTo(transparentFrame, invertedEdges)
+        //        grayFrame.release()
+        //        blurredFrame.release()
+        //        edges.release()
+        //        invertedEdges.release()
+        //        inputFrame.release()
+        return inputFrame
     }
 
     private fun deliverAndDrawFrame2(frame: CvCameraViewFrame?) {
@@ -112,13 +171,16 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
             frame!!.rgba()
         }
 
+        if (mIsFilter && !mIsFilterFirst) {
+            return
+        }
+
         var bmpValid = true
         if (modified != null) {
             try {
                 if (mIsFilter) {
-                    val edgeDetectedFrame = detectEdges(modified)
-                    modified.release()
-                    modified = edgeDetectedFrame
+                    modified = detectEdges(modified)
+                    mIsFilterFirst = false
                 }
                 Utils.matToBitmap(modified, mCacheBitmap)
             } catch (e: Exception) {
@@ -146,10 +208,6 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
                 )
                 // Restore canvas after draw bitmap
                 canvas.restoreToCount(saveCount)
-                if (mFpsMeter != null) {
-                    mFpsMeter.measure()
-                    mFpsMeter.draw(canvas, 20f, 30f)
-                }
                 holder.unlockCanvasAndPost(canvas)
             }
         }
@@ -158,17 +216,8 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
 
     fun updateFilterStatus(isFilter: Boolean) {
         mIsFilter = isFilter
-        lastFilteredFrameTime = 0
+        mIsFilterFirst = true
     }
-
-    fun setFitToCanvas(fitToCanvas: Boolean) {
-        mFitToCanvas = fitToCanvas
-    }
-
-    fun getFitToCanvas(): Boolean {
-        return mFitToCanvas
-    }
-
 
     override fun AllocateCache() {
         if (!mFitToCanvas) {
@@ -189,14 +238,6 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
         mFpsMeter = null
     }
 
-    override fun enableView() {
-        super.enableView()
-    }
-
-    override fun disableView() {
-        super.disableView()
-    }
-
     override fun setCvCameraViewListener(listener: CvCameraViewListener2?) {
         super.setCvCameraViewListener(listener)
         mListener = listener
@@ -204,16 +245,5 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
 
     fun getCameraDevice(): CameraDevice? {
         return mCameraDevice
-    }
-
-    fun turnOnFlashlight() {
-        val captureRequestBuilder =
-            mCameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-        captureRequestBuilder.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_TORCH)
-        mCaptureSession!!.setRepeatingRequest(
-            mPreviewRequestBuilder.build(),
-            null,
-            mBackgroundHandler
-        )
     }
 }

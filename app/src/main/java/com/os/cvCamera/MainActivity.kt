@@ -8,6 +8,7 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.Bundle
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.Toast
 import com.os.cvCamera.BuildConfig.VERSION_NAME
 import com.os.cvCamera.databinding.ActivityMainBinding
@@ -55,7 +56,7 @@ class MainActivity : CameraActivity(), CvCameraViewListener2 {
 
     private fun configButtons() {
         binding.cvCameraChangeFab.setOnClickListener {
-            cameraSwitch()
+             cameraSwitch()
         }
 
         binding.bottomAppBar.setOnMenuItemClickListener { menuItem ->
@@ -76,6 +77,7 @@ class MainActivity : CameraActivity(), CvCameraViewListener2 {
                 R.id.btnRecognize -> {
                     mIsEnableFilter = !mIsEnableFilter
                     binding.CvCamera.updateFilterStatus(mIsEnableFilter)
+//                    val btnRecognize = findViewById<Button>(R.id.btnRecognize)
                     true
                 }
 
