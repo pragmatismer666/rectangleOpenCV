@@ -61,7 +61,10 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
         updateMatrix()
     }
 
-
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        updateMatrix()
+    }
 
     override fun deliverAndDrawFrame(frame: CvCameraViewFrame?) {
         deliverAndDrawFrame2(frame)
@@ -77,7 +80,6 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
     ) {
 
         for (point in pointsList) {
-
             Imgproc.circle(inputFrame, point, 2, Scalar(0.0, 250.0, 0.0), -1)
         }
         // Add edge line for whole area
@@ -132,7 +134,7 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
             val line = lines.get(i, 0)
             val x1: Double = line[0]
             val y1: Double = line[1]
-            if (5 < x1 && x1 < 650 && 50 < y1 && y1 < 420) {
+            if (5 < x1 && x1 < mCacheBitmap!!.width / mScale - 50 && 50 < y1 && y1 < mCacheBitmap!!.height / mScale - 50) {
                 if (x1 < minX) minX = x1
                 if (y1 < minY) minY = y1
                 if (x1 > maxX) maxX = x1
@@ -141,7 +143,7 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
             }
             val x2: Double = line[2]
             val y2: Double = line[3]
-            if (5 < x2 && x2 < 650 && 50 < y2 && y2 < 420) {
+            if (5 < x2 && x2 < mCacheBitmap!!.width / mScale - 50 && 50 < y2 && y2 < mCacheBitmap!!.height / mScale - 50) {
                 if (x2 < minX) minX = x2
                 if (y2 < minY) minY = y2
                 if (x2 > maxX) maxX = x2
@@ -208,6 +210,10 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
                 )
                 // Restore canvas after draw bitmap
                 canvas.restoreToCount(saveCount)
+                if (mFpsMeter != null) {
+                    mFpsMeter.measure()
+                    mFpsMeter.draw(canvas, 20f, 30f)
+                }
                 holder.unlockCanvasAndPost(canvas)
             }
         }

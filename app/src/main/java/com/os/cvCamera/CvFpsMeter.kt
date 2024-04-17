@@ -61,6 +61,6 @@ class CvFpsMeter : FpsMeter() { // Measure and Draw FPS number, resolution
     }
 
     override fun draw(canvas: Canvas, offsetx: Float, offsety: Float) {
-//         canvas.drawText(mStrfps!!, offsetx + mExtraOffsetX, offsety + mExtraOffsetY, mPaint!!)
+        canvas.drawText(mStrfps!!, offsetx + mExtraOffsetX, offsety + mExtraOffsetY, mPaint!!)
     }
 }
