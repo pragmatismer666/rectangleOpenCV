@@ -29,13 +29,15 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
     private var mIsFilter: Boolean = false
     private var mIsFilterFirst: Boolean = true
 
+    private var cw : Float = 720f
+    private var ch : Float = 480f
     private fun updateMatrix() {
         val mw: Float = this.width.toFloat()
         val mh: Float = this.height.toFloat()
         val hw: Float = this.width.toFloat() / 2.0f
         val hh: Float = this.height.toFloat() / 2.0f
-        val cw = Resources.getSystem().displayMetrics.widthPixels.toFloat()
-        val ch = Resources.getSystem().displayMetrics.heightPixels.toFloat()
+        cw = Resources.getSystem().displayMetrics.widthPixels.toFloat()
+        ch = Resources.getSystem().displayMetrics.heightPixels.toFloat()
         var scale: Float = cw / mh
         val scale2: Float = ch / mw
         if (scale2 > scale) {
@@ -122,9 +124,13 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
         // Apply Canny edge detection
         val edges = Mat()
         Imgproc.Canny(blurredFrame, edges, 100.0, 250.0)
-
         val lines = Mat()
         Imgproc.HoughLinesP(edges, lines, 1.0, Math.PI / 360, 20, 20.0, 50.0)
+
+        val limitMinX : Double = 5.0
+        val limitMaxX = ((cw + mCacheBitmap!!.width ) / mScale / 2 - 70 * mScale).toDouble()
+        val limitMinY : Double =  60.0 * mScale
+        val limitMaxY = (mCacheBitmap!!.height / mScale - 60 * mScale).toDouble()
         val pointsList = mutableListOf<Point>()
         var minX = 1000.0
         var minY = 1000.0
@@ -134,7 +140,7 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
             val line = lines.get(i, 0)
             val x1: Double = line[0]
             val y1: Double = line[1]
-            if (5 < x1 && x1 < mCacheBitmap!!.width / mScale - 50 && 50 < y1 && y1 < mCacheBitmap!!.height / mScale - 50) {
+            if (limitMinX < x1 && x1 < limitMaxX && limitMinY < y1 && y1 < limitMaxY) {
                 if (x1 < minX) minX = x1
                 if (y1 < minY) minY = y1
                 if (x1 > maxX) maxX = x1
@@ -143,7 +149,7 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
             }
             val x2: Double = line[2]
             val y2: Double = line[3]
-            if (5 < x2 && x2 < mCacheBitmap!!.width / mScale - 50 && 50 < y2 && y2 < mCacheBitmap!!.height / mScale - 50) {
+            if (limitMinX < x2 && x2 < limitMaxX && limitMinY < y2 && y2 < limitMaxY) {
                 if (x2 < minX) minX = x2
                 if (y2 < minY) minY = y2
                 if (x2 > maxX) maxX = x2
@@ -152,6 +158,11 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
             }
         }
         detectCoordinate(inputFrame, pointsList, minX, maxX, minY, maxY)
+        // 720 x 480
+        // Imgproc.line(inputFrame, Point(5.0, 515.0), Point(650.0, 885.0), Scalar(0.0, 250.0, 0.0), 2)
+        // 960 x 720
+        // Imgproc.line(inputFrame, Point(5.0, 130.0), Point(855.0, 590.0), Scalar(0.0, 250.0, 0.0), 2)
+
         //        // Invert the edges to create a mask where edge pixels are black and everything else is white
         //        val invertedEdges = Mat()
         //        Core.bitwise_not(edges, invertedEdges)
