@@ -11,13 +11,14 @@ import android.hardware.camera2.CameraDevice
 import android.util.AttributeSet
 import org.opencv.android.JavaCamera2View
 import org.opencv.android.Utils
+import org.opencv.core.Core
 import org.opencv.core.Mat
 import org.opencv.core.Point
 import org.opencv.core.Scalar
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import timber.log.Timber
-
+import com.os.cvCamera.PointDTO
 
 class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
     JavaCamera2View(context, attrs) {
@@ -78,10 +79,15 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
         minX: Double,
         maxX: Double,
         minY: Double,
-        maxY: Double
+        maxY: Double,
+        outX: Double,
+        outY: Double,
     ) {
 
+        var points : MutableList<PointDTO> = mutableListOf()
         for (point in pointsList) {
+            val pointDTO = PointDTO(point, Point(point.x - outX, outY - point.y))
+            points.add(pointDTO)
             Imgproc.circle(inputFrame, point, 2, Scalar(0.0, 250.0, 0.0), -1)
         }
         // Add edge line for whole area
@@ -90,11 +96,23 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
         Imgproc.line(inputFrame, Point(maxX, minY), Point(maxX, maxY), Scalar(0.0, 250.0, 0.0), 2)
         Imgproc.line(inputFrame, Point(minX, maxY), Point(maxX, maxY), Scalar(0.0, 250.0, 0.0), 2)
 
-        // zero point
+        // Bottom Left point
+        var lb_x = minX - outX
+        if ( lb_x < 0 ) lb_x = 0.0
+        if ( lb_x > 960 ) lb_x = 955.0
+        var rt_x = maxX - outX
+        if ( rt_x < 0 ) rt_x = 0.0
+        if ( rt_x > 960 ) rt_x = 955.0
+        var rt_y = outY - minY
+        if ( rt_y < 0 ) rt_y = 0.0
+        if ( rt_y > 720 ) rt_y = 715.0
+        var lb_y = outY - maxY
+        if ( lb_y < 0 ) lb_y = 0.0
+        if ( lb_y > 720 ) lb_y = 715.0
         Imgproc.circle(inputFrame, Point(minX, maxY), 2, Scalar(250.0, 0.0, 0.0), -1)
         Imgproc.putText(
             inputFrame,
-            "(0, 0)",
+            "(${lb_x}, ${lb_y})",
             Point(minX + 10, maxY - 10),
             Imgproc.FONT_HERSHEY_SIMPLEX,
             0.5,
@@ -102,11 +120,12 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
             1,
             Imgproc.LINE_AA
         )
+        // Top right point
         Imgproc.circle(inputFrame, Point(maxX, minY), 2, Scalar(250.0, 0.0, 0.0), -1)
         Imgproc.putText(
             inputFrame,
-            "(X, Y)",
-            Point(maxX - 50, minY + 20),
+            "(${rt_x}, ${rt_y})",
+            Point(maxX - 100, minY + 20),
             Imgproc.FONT_HERSHEY_SIMPLEX,
             0.5,
             Scalar(255.0, 0.0, 0.0),
@@ -116,21 +135,37 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
     }
 
     private fun detectEdges(inputFrame: Mat): Mat {
-        val grayFrame = Mat()
-        Imgproc.cvtColor(inputFrame, grayFrame, Imgproc.COLOR_BGR2GRAY)
-        // Apply Gaussian blur to reduce noise and detail
-        val blurredFrame = Mat()
-        Imgproc.GaussianBlur(grayFrame, blurredFrame, Size(3.0, 3.0), 0.0)
-        // Apply Canny edge detection
+        //        val grayFrame = Mat()
+        //        Imgproc.cvtColor(inputFrame, grayFrame, Imgproc.COLOR_BGR2GRAY)
+        //        // Apply Gaussian blur to reduce noise and detail
+        //        val blurredFrame = Mat()
+        //        Imgproc.GaussianBlur(grayFrame, blurredFrame, Size(3.0, 3.0), 0.0)
+        //        // Apply Canny edge detection
+        //        val edges = Mat()
+        //        Imgproc.Canny(blurredFrame, edges, 100.0, 250.0)
+
+        val hsvFrame = Mat()
+        Imgproc.cvtColor(inputFrame, hsvFrame, Imgproc.COLOR_BGR2HSV)
+        // Threshold to find near white colors
+        val lowerWhite = Scalar(0.0, 0.0, 150.0) // Lower bound for HSV values
+        val upperWhite = Scalar(180.0, 50.0, 255.0) // Upper bound for near white colors
+        val mask = Mat()
+        Core.inRange(hsvFrame, lowerWhite, upperWhite, mask)
+        // Optional: Apply Gaussian blur to the mask to smooth the edges
+        Imgproc.GaussianBlur(mask, mask, Size(3.0, 3.0), 0.0)
+        // Apply Canny edge detection on the mask
         val edges = Mat()
-        Imgproc.Canny(blurredFrame, edges, 100.0, 250.0)
+        Imgproc.Canny(mask, edges, 100.0, 250.0)
+
         val lines = Mat()
-        Imgproc.HoughLinesP(edges, lines, 1.0, Math.PI / 360, 20, 20.0, 50.0)
+        Imgproc.HoughLinesP(edges, lines, 1.0, Math.PI / 360, 20, 20.0, 30.0)
 
         val limitMinX : Double = 5.0
         val limitMaxX = ((cw + mCacheBitmap!!.width ) / mScale / 2 - 70 * mScale).toDouble()
-        val limitMinY : Double =  60.0 * mScale
-        val limitMaxY = (mCacheBitmap!!.height / mScale - 60 * mScale).toDouble()
+        var limitMinY : Double =  60.0
+        if (mScale > 1f) limitMinY *= mScale * 2
+        var limitMaxY = (mCacheBitmap!!.height  - 60).toDouble()
+        if (mScale > 1f) limitMaxY -= mScale * 60
         val pointsList = mutableListOf<Point>()
         var minX = 1000.0
         var minY = 1000.0
@@ -157,7 +192,7 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
                 pointsList.add(Point(x2, y2))
             }
         }
-        detectCoordinate(inputFrame, pointsList, minX, maxX, minY, maxY)
+        detectCoordinate(inputFrame, pointsList, minX, maxX, minY, maxY, limitMinX, mCacheBitmap!!.height - limitMinY)
         // 720 x 480
         // Imgproc.line(inputFrame, Point(5.0, 515.0), Point(650.0, 885.0), Scalar(0.0, 250.0, 0.0), 2)
         // 960 x 720
@@ -221,10 +256,10 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
                 )
                 // Restore canvas after draw bitmap
                 canvas.restoreToCount(saveCount)
-                if (mFpsMeter != null) {
-                    mFpsMeter.measure()
-                    mFpsMeter.draw(canvas, 20f, 30f)
-                }
+                //                if (mFpsMeter != null) {
+                //                    mFpsMeter.measure()
+                //                    mFpsMeter.draw(canvas, 20f, 30f)
+                //                }
                 holder.unlockCanvasAndPost(canvas)
             }
         }
