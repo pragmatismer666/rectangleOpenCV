@@ -19,6 +19,10 @@ import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import timber.log.Timber
 import com.os.cvCamera.PointDTO
+import org.opencv.core.MatOfPoint
+import org.opencv.core.MatOfPoint2f
+import java.io.File
+import java.io.FileOutputStream
 
 class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
     JavaCamera2View(context, attrs) {
@@ -157,60 +161,82 @@ class ExtendJavaCamera2View(context: Context, attrs: AttributeSet? = null) :
         val edges = Mat()
         Imgproc.Canny(mask, edges, 100.0, 250.0)
 
-        val lines = Mat()
-        Imgproc.HoughLinesP(edges, lines, 1.0, Math.PI / 360, 20, 20.0, 30.0)
+        // Find contours from edges
+        val contours = ArrayList<MatOfPoint>()
+        val hierarchy = Mat()
+        Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
 
-        val limitMinX : Double = 5.0
-        val limitMaxX = ((cw + mCacheBitmap!!.width ) / mScale / 2 - 70 * mScale).toDouble()
-        var limitMinY : Double =  60.0
-        if (mScale > 1f) limitMinY *= mScale * 2
-        var limitMaxY = (mCacheBitmap!!.height  - 60).toDouble()
-        if (mScale > 1f) limitMaxY -= mScale * 60
-        val pointsList = mutableListOf<Point>()
-        var minX = 1000.0
-        var minY = 1000.0
-        var maxX = 0.0
-        var maxY = 0.0
-        for (i in 0 until lines.rows()) {
-            val line = lines.get(i, 0)
-            val x1: Double = line[0]
-            val y1: Double = line[1]
-            if (limitMinX < x1 && x1 < limitMaxX && limitMinY < y1 && y1 < limitMaxY) {
-                if (x1 < minX) minX = x1
-                if (y1 < minY) minY = y1
-                if (x1 > maxX) maxX = x1
-                if (y1 > maxY) maxY = y1
-                pointsList.add(Point(x1, y1))
-            }
-            val x2: Double = line[2]
-            val y2: Double = line[3]
-            if (limitMinX < x2 && x2 < limitMaxX && limitMinY < y2 && y2 < limitMaxY) {
-                if (x2 < minX) minX = x2
-                if (y2 < minY) minY = y2
-                if (x2 > maxX) maxX = x2
-                if (y2 > maxY) maxY = y2
-                pointsList.add(Point(x2, y2))
+        // Filter contours and extract corners
+        val corners = ArrayList<Point>()
+        contours.forEach { contour ->
+            val contourFloat = MatOfPoint2f(*contour.toArray())
+            val approxCurve = MatOfPoint2f()
+            Imgproc.approxPolyDP(contourFloat, approxCurve, 0.02 * Imgproc.arcLength(contourFloat, true), true)
+            // Check for rectangle or square-like shapes, which have 4 corners
+            if (approxCurve.total() == 4L) {
+                val points = approxCurve.toArray().toList()
+                corners.addAll(points)
             }
         }
-        detectCoordinate(inputFrame, pointsList, minX, maxX, minY, maxY, limitMinX, mCacheBitmap!!.height - limitMinY)
+
+        for (point in corners) {
+            Imgproc.circle(inputFrame, Point(point.x, point.y), 2, Scalar(0.0, 250.0, 0.0), 2)
+        }
+        //val lines = Mat()
+        //Imgproc.HoughLinesP(edges, lines, 1.0, Math.PI / 360, 20, 20.0, 30.0)
+        //
+        //val limitMinX : Double = 5.0
+        //val limitMaxX = ((cw + mCacheBitmap!!.width ) / mScale / 2 - 70 * mScale).toDouble()
+        //var limitMinY : Double =  60.0
+        //if (mScale > 1f) limitMinY *= mScale * 2
+        //var limitMaxY = (mCacheBitmap!!.height  - 60).toDouble()
+        //if (mScale > 1f) limitMaxY -= mScale * 60
+        //val pointsList = mutableListOf<Point>()
+        //var minX = 1000.0
+        //var minY = 1000.0
+        //var maxX = 0.0
+        //var maxY = 0.0
+        //for (i in 0 until lines.rows()) {
+        //    val line = lines.get(i, 0)
+        //    val x1: Double = line[0]
+        //    val y1: Double = line[1]
+        //    if (limitMinX < x1 && x1 < limitMaxX && limitMinY < y1 && y1 < limitMaxY) {
+        //        if (x1 < minX) minX = x1
+        //        if (y1 < minY) minY = y1
+        //        if (x1 > maxX) maxX = x1
+        //        if (y1 > maxY) maxY = y1
+        //        pointsList.add(Point(x1, y1))
+        //    }
+        //    val x2: Double = line[2]
+        //    val y2: Double = line[3]
+        //    if (limitMinX < x2 && x2 < limitMaxX && limitMinY < y2 && y2 < limitMaxY) {
+        //        if (x2 < minX) minX = x2
+        //        if (y2 < minY) minY = y2
+        //        if (x2 > maxX) maxX = x2
+        //        if (y2 > maxY) maxY = y2
+        //        pointsList.add(Point(x2, y2))
+        //    }
+        //}
+        //detectCoordinate(inputFrame, pointsList, minX, maxX, minY, maxY, limitMinX, mCacheBitmap!!.height - limitMinY)
         // 720 x 480
         // Imgproc.line(inputFrame, Point(5.0, 515.0), Point(650.0, 885.0), Scalar(0.0, 250.0, 0.0), 2)
         // 960 x 720
         // Imgproc.line(inputFrame, Point(5.0, 130.0), Point(855.0, 590.0), Scalar(0.0, 250.0, 0.0), 2)
 
-        //        // Invert the edges to create a mask where edge pixels are black and everything else is white
-        //        val invertedEdges = Mat()
-        //        Core.bitwise_not(edges, invertedEdges)
-        //        // Define transparent color (in BGR format)
-        //        val transparentColor = Scalar(0.0, 0.0, 0.0, 0.0) // Fully transparent black
-        //        // Create a copy of the original frame with transparent edges
-        //        val transparentFrame = Mat(inputFrame.size(), inputFrame.type(), transparentColor)
-        //        inputFrame.copyTo(transparentFrame, invertedEdges)
-        //        grayFrame.release()
-        //        blurredFrame.release()
-        //        edges.release()
-        //        invertedEdges.release()
-        //        inputFrame.release()
+        // // Invert the edges to create a mask where edge pixels are black and everything else is white
+        //val invertedEdges = Mat()
+        //Core.bitwise_not(edges, invertedEdges)
+        //// Define transparent color (in BGR format)
+        //val transparentColor = Scalar(0.0, 0.0, 0.0, 0.0) // Fully transparent black
+        //// Create a copy of the original frame with transparent edges
+        //val transparentFrame = Mat(inputFrame.size(), inputFrame.type(), transparentColor)
+        //inputFrame.copyTo(transparentFrame, invertedEdges)
+        //edges.release()
+        //invertedEdges.release()
+        //inputFrame.release()
+
+
+
         return inputFrame
     }
 
